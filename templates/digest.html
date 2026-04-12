@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      color: #1a1a1a;
+      background: #ffffff;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 1.3em;
+      border-bottom: 2px solid #b91c1c;
+      padding-bottom: 8px;
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 1.05em;
+      color: #b91c1c;
+      margin: 32px 0 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .paper {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-left: 3px solid #b91c1c;
+      background: #fafafa;
+    }
+    .paper.skim {
+      border-left-color: #d97706;
+      background: #fffbf0;
+    }
+    .paper.irr {
+      border: none;
+      background: none;
+      padding: 3px 0;
+      margin-bottom: 4px;
+    }
+    .title {
+      font-weight: bold;
+      font-size: 0.97em;
+    }
+    .authors {
+      color: #555;
+      font-size: 0.82em;
+      margin: 3px 0 2px;
+    }
+    .venue {
+      color: #777;
+      font-size: 0.80em;
+      font-style: italic;
+      margin-bottom: 5px;
+    }
+    .venue.accepted {
+      color: #15803d;
+      font-weight: bold;
+      font-style: normal;
+    }
+    .summary {
+      color: #2d2d2d;
+      font-size: 0.90em;
+      margin-top: 6px;
+    }
+    a { color: #b91c1c; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .section-count {
+      font-weight: normal;
+      color: #888;
+      font-size: 0.85em;
+    }
+    footer {
+      font-size: 0.72em;
+      color: #aaa;
+      margin-top: 40px;
+      border-top: 1px solid #eee;
+      padding-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>DB Paper Digest &mdash; {{ digest_date }} &nbsp;<span style="font-weight:normal;color:#888;font-size:0.85em">{{ total }} new paper{{ 's' if total != 1 else '' }}</span></h1>
+
+{# ── venue macro: green badge for accepted papers, italic for others ── #}
+{% macro venue_tag(paper) %}
+  {% if paper.venue %}
+    {% if paper.venue.startswith("Accepted at") %}
+    <div class="venue accepted">{{ paper.venue }}</div>
+    {% else %}
+    <div class="venue">{{ paper.venue }}</div>
+    {% endif %}
+  {% elif paper.source == "arxiv" %}
+  <div class="venue">arXiv preprint</div>
+  {% endif %}
+{% endmacro %}
+
+{# ── MUST READ ─────────────────────────────────────────────── #}
+{% if must_read %}
+<h2>Must Read <span class="section-count">({{ must_read | length }})</span></h2>
+{% for item in must_read %}
+<div class="paper">
+  <div class="title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a></div>
+  {% if item.paper.authors %}
+  <div class="authors">{{ item.paper.authors | join(", ") }}</div>
+  {% endif %}
+  {{ venue_tag(item.paper) }}
+  {% if item.summary %}
+  <div class="summary">{{ item.summary }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{# ── SKIM ──────────────────────────────────────────────────── #}
+{% if skim %}
+<h2>Worth a Skim <span class="section-count">({{ skim | length }})</span></h2>
+{% for item in skim %}
+<div class="paper skim">
+  <div class="title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a></div>
+  {{ venue_tag(item.paper) }}
+  {% if item.summary %}
+  <div class="summary">{{ item.summary }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{# ── IRRELEVANT ────────────────────────────────────────────── #}
+{% if irrelevant %}
+<h2>Everything Else <span class="section-count">({{ irrelevant | length }})</span></h2>
+{% for paper in irrelevant %}
+<div class="paper irr">
+  <a href="{{ paper.url }}">{{ paper.title }}</a>
+  {% if paper.venue %}
+    {% if paper.venue.startswith("Accepted at") %}
+    <span style="color:#15803d;font-size:0.82em;font-weight:bold">&mdash; {{ paper.venue }}</span>
+    {% else %}
+    <span style="color:#999;font-size:0.82em">&mdash; {{ paper.venue }}</span>
+    {% endif %}
+  {% elif paper.source == "arxiv" %}
+  <span style="color:#999;font-size:0.82em">&mdash; arXiv</span>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+<footer>
+  Generated {{ generation_timestamp }} &nbsp;&middot;&nbsp;
+  Sources: arXiv cs.DB/cs.IR (with conference-acceptance detection) &amp; SIGMOD / VLDB / ICDE / EDBT / CIDR via Crossref
+</footer>
+
+</body>
+</html>
