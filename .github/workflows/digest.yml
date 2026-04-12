@@ -2,8 +2,15 @@ name: Daily DB Paper Digest
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # 06:00 UTC daily — adjust if you want a different timezone
-  workflow_dispatch:        # lets you trigger a run manually from the GitHub UI
+    - cron: '0 4 * * *'   # 06:00 CEST (UTC+2) — shifts to 05:00 local in winter (CET)
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Fetch papers since this date (YYYY-MM-DD). Leave empty for yesterday.'
+        required: false
+      date:
+        description: 'Fetch papers for a single specific date (YYYY-MM-DD). Leave empty for yesterday.'
+        required: false
 
 jobs:
   digest:
@@ -26,8 +33,14 @@ jobs:
           CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
 
       - name: Run digest
-        run: python main.py
+        run: |
+          ARGS=""
+          [ -n "$SINCE" ] && ARGS="--since $SINCE"
+          [ -n "$DATE" ]  && ARGS="--date $DATE"
+          python main.py $ARGS
         env:
+          SINCE: ${{ github.event.inputs.since }}
+          DATE: ${{ github.event.inputs.date }}
           DIGEST_CONFIG: /tmp/config.yaml
           CSCS_SERVING_API: ${{ secrets.CSCS_SERVING_API }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
