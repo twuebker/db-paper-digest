@@ -5,11 +5,11 @@ import os
 import re
 import time
 
-import requests
+from google import genai
+from google.genai import types
 
 from sources import Paper, RankedResult
 
-LLM_URL = "https://api.swissai.svc.cscs.ch/v1/chat/completions"
 MAX_RETRIES = 3
 
 SYSTEM_PROMPT = """\
@@ -26,15 +26,17 @@ You will receive a JSON array of papers. Classify each paper into exactly one of
 Rules:
 1. Respond ONLY with valid JSON — no markdown fences, no <think> tags, no commentary.
 2. Every paper "id" from the input must appear in exactly one output category.
-3. For must_read and skim entries, include a "summary" field: one concise sentence describing the paper's contribution.
-4. Limit "skim" to at most 10 items; demote extras to "irrelevant".
-5. There must be exactly one must_read paper (the single most relevant); if nothing is relevant, pick the closest.
+3. For must_read and skim entries, include a "summary" field: exactly two concise sentences — \
+the first describing the paper's core contribution, the second explaining its relevance to the researcher's focus.
+4. For irrelevant entries, include a "synopsis" field: one sentence describing what the paper is about.
+5. Limit "skim" to at most 10 items; demote extras to "irrelevant".
+6. There must be exactly one must_read paper (the single most relevant); if nothing is relevant, pick the closest.
 
 Output format (strict):
 {{
   "must_read": [{{"id": "...", "summary": "..."}}],
   "skim":      [{{"id": "...", "summary": "..."}}],
-  "irrelevant": ["id1", "id2", ...]
+  "irrelevant": [{{"id": "...", "synopsis": "..."}}]
 }}"""
 
 
@@ -66,12 +68,7 @@ def _rank_batch(papers: list[Paper], config: dict) -> RankedResult:
         for p in papers
     ]
 
-    thinking = config.get("llm_thinking", False)
     system = SYSTEM_PROMPT.format(research_description=research_description)
-    if not thinking:
-        # Qwen3 soft switch: suppresses the <think> reasoning block entirely.
-        system = "/no_think\n" + system
-
     user_msg = f"Classify the following {len(papers)} papers:\n\n{json.dumps(paper_list, indent=2)}"
 
     messages = [
@@ -100,28 +97,46 @@ def _rank_batch(papers: list[Paper], config: dict) -> RankedResult:
     )
 
 
+
 def _call_llm(messages: list[dict], config: dict) -> str:
-    api_key = os.environ["CSCS_SERVING_API"]
-    model = config.get("llm_model", "Qwen/Qwen3-235B-A22B-Instruct-2507")
+    api_key = os.environ["GEMINI_API_KEY"]
+    model = config.get("llm_model", "gemini-2.5-flash-lite")
     thinking = config.get("llm_thinking", False)
     max_tokens = config.get("llm_max_tokens", 4096)
 
-    payload: dict = {
-        "model": model,
-        "messages": messages,
-        "temperature": 0.1,
-        "max_tokens": max_tokens,
-        "enable_thinking": thinking,
-    }
+    client = genai.Client(api_key=api_key)
 
-    resp = requests.post(
-        LLM_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
-        json=payload,
-        timeout=180,
+    system = next((m["content"] for m in messages if m["role"] == "system"), None)
+
+    # Gemini requires strictly alternating user/model turns; merge any consecutive
+    # same-role messages that arise from the JSON-retry logic.
+    contents: list[types.Content] = []
+    for m in messages:
+        if m["role"] == "system":
+            continue
+        role = "user" if m["role"] == "user" else "model"
+        part = types.Part(text=m["content"])
+        if contents and contents[-1].role == role:
+            contents[-1] = types.Content(role=role, parts=contents[-1].parts + [part])
+        else:
+            contents.append(types.Content(role=role, parts=[part]))
+
+    cfg_kwargs: dict = {
+        "system_instruction": system,
+        "temperature": 0.1,
+        "max_output_tokens": max_tokens,
+    }
+    if not thinking:
+        cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+
+    t0 = time.perf_counter()
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=types.GenerateContentConfig(**cfg_kwargs),
     )
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    print(f"[timing] gemini generate_content: {time.perf_counter() - t0:.2f}s")
+    return response.text
 
 
 def _extract_json(text: str) -> str:
@@ -160,15 +175,16 @@ def _parse_response(raw: str, original_papers: list[Paper]) -> RankedResult:
             accounted.add(pid)
 
     irrelevant = []
-    for pid in irrelevant_raw:
-        if isinstance(pid, str) and pid in paper_by_id and pid not in accounted:
-            irrelevant.append(paper_by_id[pid])
+    for item in irrelevant_raw:
+        pid = item.get("id", "") if isinstance(item, dict) else item
+        if pid in paper_by_id and pid not in accounted:
+            irrelevant.append({"paper": paper_by_id[pid], "synopsis": item.get("synopsis", "") if isinstance(item, dict) else ""})
             accounted.add(pid)
 
     # Any paper not returned by LLM falls back to irrelevant
     for p in original_papers:
         if p.id not in accounted:
-            irrelevant.append(p)
+            irrelevant.append({"paper": p, "synopsis": ""})
 
     return RankedResult(must_read=must_read, skim=skim, irrelevant=irrelevant)
 
@@ -186,6 +202,6 @@ def _merge_ranked_results(results: list[RankedResult], all_papers: list[Paper]) 
     skim = (overflow_must + all_skim)[:10]
     # Papers from must/skim overflow that didn't fit → irrelevant
     overflow_skim = (overflow_must + all_skim)[10:]
-    irrelevant = all_irrelevant + [item["paper"] for item in overflow_skim]
+    irrelevant = all_irrelevant + [{"paper": item["paper"], "synopsis": ""} for item in overflow_skim]
 
     return RankedResult(must_read=must_read, skim=skim, irrelevant=irrelevant)

@@ -3,7 +3,8 @@
 import argparse
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -16,11 +17,17 @@ _REPO_ROOT = Path(__file__).parent.parent
 # Config path: explicit env var (CI) → parent-dir default (local)
 _CONFIG_PATH = Path(os.environ.get("DIGEST_CONFIG") or _REPO_ROOT / "config.yaml")
 
+@contextmanager
+def _timed(label: str):
+    t0 = time.perf_counter()
+    yield
+    print(f"[timing] {label}: {time.perf_counter() - t0:.2f}s")
+
+
 from pipeline.dedup import dedup_same_day
 from pipeline.email_sender import send_digest_email, send_empty_email
 from pipeline.ranker import rank_papers
 from sources.arxiv import fetch_arxiv
-from sources.crossref import fetch_crossref
 
 
 def main() -> None:
@@ -35,25 +42,17 @@ def main() -> None:
     start_date, end_date = _compute_date_range(args)
     print(f"[main] Fetching papers for {start_date} – {end_date}")
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {
-            executor.submit(fetch_arxiv, config, start_date, end_date): "arxiv",
-            executor.submit(fetch_crossref, config, start_date, end_date): "crossref",
-        }
-        arxiv_papers, crossref_papers = [], []
-        for future in as_completed(futures):
-            source = futures[future]
-            try:
-                result = future.result()
-                print(f"[main] {source}: {len(result)} papers fetched")
-                if source == "arxiv":
-                    arxiv_papers = result
-                else:
-                    crossref_papers = result
-            except Exception as exc:
-                print(f"[main] WARNING: {source} fetch failed: {exc}", file=sys.stderr)
+    t_total = time.perf_counter()
 
-    papers = dedup_same_day(arxiv_papers + crossref_papers)
+    with _timed("fetch (arxiv)"):
+        try:
+            arxiv_papers = fetch_arxiv(config, start_date, end_date)
+            print(f"[main] arxiv: {len(arxiv_papers)} papers fetched")
+        except Exception as exc:
+            print(f"[main] WARNING: arxiv fetch failed: {exc}", file=sys.stderr)
+            arxiv_papers = []
+
+    papers = dedup_same_day(arxiv_papers)
     print(f"[main] {len(papers)} papers after deduplication")
 
     if not papers:
@@ -64,7 +63,8 @@ def main() -> None:
             send_empty_email(config, end_date)
         return
 
-    ranked = rank_papers(papers, config)
+    with _timed("rank (LLM)"):
+        ranked = rank_papers(papers, config)
     html = _render_digest(config, ranked, end_date, len(papers))
 
     if args.dry_run:
@@ -73,7 +73,10 @@ def main() -> None:
         print("=" * 72)
         print("[main] Dry run — email not sent.")
     else:
-        send_digest_email(config, html, end_date, len(papers))
+        with _timed("send email"):
+            send_digest_email(config, html, end_date, len(papers))
+
+    print(f"[timing] total: {time.perf_counter() - t_total:.2f}s")
 
 
 def _compute_date_range(args: argparse.Namespace) -> tuple[date, date]:
@@ -125,7 +128,7 @@ def _load_config(path: str) -> dict:
 
 
 def _validate_env() -> None:
-    missing = [k for k in ("CSCS_SERVING_API", "GMAIL_APP_PASSWORD") if not os.environ.get(k)]
+    missing = [k for k in ("GEMINI_API_KEY", "GMAIL_APP_PASSWORD") if not os.environ.get(k)]
     if missing:
         sys.exit(f"[main] Missing required environment variables: {', '.join(missing)}\n"
                  f"       Set them in your .env file.")

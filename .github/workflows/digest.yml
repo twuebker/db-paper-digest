@@ -42,5 +42,5 @@ jobs:
           SINCE: ${{ github.event.inputs.since }}
           DATE: ${{ github.event.inputs.date }}
           DIGEST_CONFIG: /tmp/config.yaml
-          CSCS_SERVING_API: ${{ secrets.CSCS_SERVING_API }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

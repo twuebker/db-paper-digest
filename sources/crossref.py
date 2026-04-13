@@ -2,7 +2,7 @@
 
 import html
 import re
-import time
+import time as time_mod
 from datetime import date
 
 import requests
@@ -33,9 +33,11 @@ def fetch_crossref(config: dict, start_date: date, end_date: date) -> list[Paper
         if sender_email:
             params["mailto"] = sender_email
 
+        t0 = time_mod.perf_counter()
         data = _fetch_page(params)
         message = data.get("message", {})
         items = message.get("items", [])
+        print(f"[timing] crossref page (cursor={cursor[:8]}…): {time_mod.perf_counter() - t0:.2f}s, {len(items)} items")
 
         for item in items:
             paper = _parse_item(item)
@@ -46,7 +48,7 @@ def fetch_crossref(config: dict, start_date: date, end_date: date) -> list[Paper
         if not items or not next_cursor:
             break
         cursor = next_cursor
-        time.sleep(1)  # be polite to Crossref
+        time_mod.sleep(1)  # be polite to Crossref
 
     return papers
 

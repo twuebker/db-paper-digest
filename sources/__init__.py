@@ -18,4 +18,4 @@ class Paper:
 class RankedResult:
     must_read: list[dict]   # [{"paper": Paper, "summary": str}]
     skim: list[dict]        # max 10 items, same structure
-    irrelevant: list[Paper]
+    irrelevant: list[dict]  # [{"paper": Paper, "synopsis": str}]

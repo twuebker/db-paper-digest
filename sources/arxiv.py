@@ -11,7 +11,7 @@ cs.DB feed into a near-real-time "just accepted" signal for conference papers.
 """
 
 import re
-import time
+import time as time_mod
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 
@@ -56,12 +56,14 @@ def fetch_arxiv(config: dict, start_date: date, end_date: date) -> list[Paper]:
             "sortBy": "submittedDate",
             "sortOrder": "descending",
         }
+        t0 = time_mod.perf_counter()
         batch = _fetch_batch(params)
+        print(f"[timing] arxiv page (offset={offset}): {time_mod.perf_counter() - t0:.2f}s, {len(batch)} results")
         papers.extend(batch)
         if len(batch) < BATCH_SIZE:
             break
         offset += BATCH_SIZE
-        time.sleep(3)  # arXiv rate limit
+        time_mod.sleep(3)  # arXiv rate limit
 
     return papers
 
