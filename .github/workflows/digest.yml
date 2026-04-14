@@ -2,7 +2,7 @@ name: Daily DB Paper Digest
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # 06:00 CEST (UTC+2) — shifts to 05:00 local in winter (CET)
+    - cron: '0 2 * * *'   # buffer: 04:00 CEST target, up to ~2h GitHub lag → ready by 06:00 CEST
   workflow_dispatch:
     inputs:
       since:

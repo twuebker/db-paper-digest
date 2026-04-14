@@ -27,7 +27,8 @@ Rules:
 1. Respond ONLY with valid JSON — no markdown fences, no <think> tags, no commentary.
 2. Every paper "id" from the input must appear in exactly one output category.
 3. For must_read and skim entries, include a "summary" field: exactly two concise sentences — \
-the first describing the paper's core contribution, the second explaining its relevance to the researcher's focus.
+the first describing the paper's core contribution, the second explaining its relevance to the researcher's focus. \
+Write the second sentence in second person, addressing the researcher directly as "you" (e.g. "It directly addresses your core research area…").
 4. For irrelevant entries, include a "synopsis" field: one sentence describing what the paper is about.
 5. Limit "skim" to at most 10 items; demote extras to "irrelevant".
 6. There must be exactly one must_read paper (the single most relevant); if nothing is relevant, pick the closest.

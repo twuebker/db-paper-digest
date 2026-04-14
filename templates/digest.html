@@ -176,7 +176,7 @@
 <div class="paper-must">
   <div class="paper-title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a></div>
   {% if item.paper.authors %}
-  <div class="paper-authors">{{ item.paper.authors[:4] | join(", ") }}{% if item.paper.authors | length > 4 %} et al.{% endif %}</div>
+  <div class="paper-authors">{{ item.paper.authors[:9] | join(", ") }}{% if item.paper.authors | length > 9 %} et al.{% endif %}</div>
   {% endif %}
   {{ venue_tag(item.paper) }}
   {% if item.summary %}
@@ -188,12 +188,12 @@
 
 {# ── SKIM ─────────────────────────────────────────────────────── #}
 {% if skim %}
-<div class="section-heading">Worth a Skim <span class="count">({{ skim | length }})</span></div>
+<div class="section-heading">👀 Worth a Skim <span class="count">({{ skim | length }})</span></div>
 {% for item in skim %}
 <div class="paper-skim">
   <div class="paper-title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a></div>
   {% if item.paper.authors %}
-  <div class="paper-authors">{{ item.paper.authors[:3] | join(", ") }}{% if item.paper.authors | length > 3 %} et al.{% endif %}</div>
+  <div class="paper-authors">{{ item.paper.authors[:9] | join(", ") }}{% if item.paper.authors | length > 9 %} et al.{% endif %}</div>
   {% endif %}
   {{ venue_tag(item.paper) }}
   {% if item.summary %}
@@ -205,11 +205,14 @@
 
 {# ── IRRELEVANT ───────────────────────────────────────────────── #}
 {% if irrelevant %}
-<div class="section-heading">Everything Else <span class="count">({{ irrelevant | length }})</span></div>
+<div class="section-heading">📦 Everything Else <span class="count">({{ irrelevant | length }})</span></div>
 {% for item in irrelevant %}
 <div class="irr-item">
   <div class="irr-title">
     <a href="{{ item.paper.url }}">{{ item.paper.title }}</a>
+    {% if item.paper.authors %}
+    <div class="irr-synopsis">{{ item.paper.authors[:9] | join(", ") }}{% if item.paper.authors | length > 9 %} et al.{% endif %}</div>
+    {% endif %}
     {% if item.paper.venue %}
       {% if item.paper.venue.startswith("Accepted at") %}
       &ensp;<span class="irr-venue accepted">{{ item.paper.venue }}</span>
