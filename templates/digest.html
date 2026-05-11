@@ -139,6 +139,31 @@
       line-height: 1.45;
     }
 
+    /* ── Warnings banner ─────────────────────────────────────── */
+    .warnings {
+      margin-bottom: 28px;
+      padding: 12px 16px;
+      background: #fff8e6;
+      border: 1px solid #f0c040;
+      border-left: 4px solid #f0c040;
+      border-radius: 6px;
+    }
+    .warnings-title {
+      font-size: 0.82em;
+      font-weight: 600;
+      color: #7a5800;
+      margin-bottom: 6px;
+    }
+    .warnings ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .warnings li {
+      font-size: 0.80em;
+      color: #7a5800;
+      line-height: 1.5;
+    }
+
     /* ── Footer ──────────────────────────────────────────────── */
     footer {
       margin-top: 52px;
@@ -155,6 +180,16 @@
   <div class="header-title">DB Paper Digest &mdash; {{ digest_date }}</div>
   <div class="header-meta">{{ total }} new paper{{ 's' if total != 1 else '' }}</div>
 </div>
+
+{# ── Warnings ─────────────────────────────────────────────────── #}
+{% if warnings %}
+<div class="warnings">
+  <div class="warnings-title">⚠️ Pipeline warnings — some papers may be missing</div>
+  <ul>
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
 
 {# ── venue macro ──────────────────────────────────────────────── #}
 {% macro venue_tag(paper, cls="paper-venue") %}

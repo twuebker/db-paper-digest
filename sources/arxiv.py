@@ -35,7 +35,7 @@ _VENUE_PATTERNS: list[tuple[str, str]] = [
 ]
 
 
-def fetch_arxiv(config: dict, start_date: date, end_date: date) -> list[Paper]:
+def fetch_arxiv(config: dict, start_date: date, end_date: date) -> tuple[list[Paper], list[str]]:
     categories = config.get("arxiv_categories", ["cs.DB", "cs.IR"])
     cat_query = " OR ".join(f"cat:{c}" for c in categories)
     # Query a 2-day window around the target range so we don't miss papers
@@ -50,6 +50,7 @@ def fetch_arxiv(config: dict, start_date: date, end_date: date) -> list[Paper]:
     search_query = f"({cat_query}) AND submittedDate:[{start_str} TO {end_str}]"
 
     raw: list[tuple[Paper, date]] = []
+    warnings: list[str] = []
     offset = 0
 
     while True:
@@ -61,9 +62,10 @@ def fetch_arxiv(config: dict, start_date: date, end_date: date) -> list[Paper]:
             "sortOrder": "descending",
         }
         t0 = time_mod.perf_counter()
-        batch = _fetch_batch(params)
+        batch, batch_warnings = _fetch_batch(params)
         print(f"[timing] arxiv page (offset={offset}): {time_mod.perf_counter() - t0:.2f}s, {len(batch)} results")
         raw.extend(batch)
+        warnings.extend(batch_warnings)
         if len(batch) < BATCH_SIZE:
             break
         offset += BATCH_SIZE
@@ -75,10 +77,10 @@ def fetch_arxiv(config: dict, start_date: date, end_date: date) -> list[Paper]:
         if start_date <= announced <= end_date
     ]
     print(f"[arxiv] {len(raw)} fetched, {len(papers)} within announcement window {start_date}–{end_date}")
-    return papers
+    return papers, warnings
 
 
-def _fetch_batch(params: dict) -> list[tuple[Paper, date]]:
+def _fetch_batch(params: dict) -> tuple[list[tuple[Paper, date]], list[str]]:
     for attempt in range(MAX_RETRIES):
         try:
             resp = requests.get(ARXIV_BASE, params=params, timeout=30)
@@ -90,12 +92,13 @@ def _fetch_batch(params: dict) -> list[tuple[Paper, date]]:
             wait = 2 ** (attempt + 1)
             print(f"[arxiv] HTTP error {exc}, retrying in {wait}s…")
             time_mod.sleep(wait)
-    return []
+    return [], []
 
 
-def _parse_atom(xml_bytes: bytes) -> list[tuple[Paper, date]]:
+def _parse_atom(xml_bytes: bytes) -> tuple[list[tuple[Paper, date]], list[str]]:
     root = ET.fromstring(xml_bytes)
     papers = []
+    warnings = []
     for entry in root.findall(f"{ATOM_NS}entry"):
         raw_id = (entry.findtext(f"{ATOM_NS}id") or "").strip()
         # Strip URL prefix and version: "http://arxiv.org/abs/2401.12345v2" → "2401.12345"
@@ -129,6 +132,8 @@ def _parse_atom(xml_bytes: bytes) -> list[tuple[Paper, date]]:
             announced = datetime.fromisoformat(published_str.replace("Z", "+00:00")).astimezone(timezone.utc).date()
         except ValueError:
             announced = None
+            label = title or arxiv_id or "unknown"
+            warnings.append(f"Skipped paper — could not parse announcement date ({published_str!r}): {label}")
 
         comment_el = entry.find(f"{ARXIV_NS}comment")
         comment = " ".join((comment_el.text or "").split()) if comment_el is not None else None
@@ -139,6 +144,8 @@ def _parse_atom(xml_bytes: bytes) -> list[tuple[Paper, date]]:
         venue = _detect_venue(comment, journal_ref)
 
         if not arxiv_id or not title or announced is None:
+            if (not arxiv_id or not title) and announced is not None:
+                warnings.append(f"Skipped paper — missing ID or title (id={arxiv_id!r}, title={title!r})")
             continue
 
         papers.append((Paper(
@@ -153,7 +160,7 @@ def _parse_atom(xml_bytes: bytes) -> list[tuple[Paper, date]]:
             journal_ref=journal_ref,
         ), announced))
 
-    return papers
+    return papers, warnings
 
 
 def _detect_venue(comment: str | None, journal_ref: str | None) -> str | None:

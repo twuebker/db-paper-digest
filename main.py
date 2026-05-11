@@ -45,12 +45,10 @@ def main() -> None:
     t_total = time.perf_counter()
 
     with _timed("fetch (arxiv)"):
-        try:
-            arxiv_papers = fetch_arxiv(config, start_date, end_date)
-            print(f"[main] arxiv: {len(arxiv_papers)} papers fetched")
-        except Exception as exc:
-            print(f"[main] WARNING: arxiv fetch failed: {exc}", file=sys.stderr)
-            arxiv_papers = []
+        arxiv_papers, warnings = fetch_arxiv(config, start_date, end_date)
+        print(f"[main] arxiv: {len(arxiv_papers)} papers fetched")
+        for w in warnings:
+            print(f"[main] WARNING: {w}", file=sys.stderr)
 
     papers = dedup_same_day(arxiv_papers)
     print(f"[main] {len(papers)} papers after deduplication")
@@ -65,7 +63,7 @@ def main() -> None:
 
     with _timed("rank (LLM)"):
         ranked = rank_papers(papers, config)
-    html = _render_digest(config, ranked, end_date, len(papers))
+    html = _render_digest(config, ranked, end_date, len(papers), warnings)
 
     if args.dry_run:
         print("\n" + "=" * 72)
@@ -104,7 +102,7 @@ def _compute_date_range(args: argparse.Namespace) -> tuple[date, date]:
     return start, end
 
 
-def _render_digest(config: dict, ranked, digest_date: date, total: int) -> str:
+def _render_digest(config: dict, ranked, digest_date: date, total: int, warnings: list[str] | None = None) -> str:
     from datetime import datetime
     template_file = config.get("template_file", "templates/digest.html")
     template_dir = os.path.dirname(template_file)
@@ -118,6 +116,7 @@ def _render_digest(config: dict, ranked, digest_date: date, total: int) -> str:
         must_read=ranked.must_read,
         skim=ranked.skim,
         irrelevant=ranked.irrelevant,
+        warnings=warnings or [],
         generation_timestamp=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
 

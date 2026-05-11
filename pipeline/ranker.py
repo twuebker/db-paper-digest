@@ -90,11 +90,8 @@ def _rank_batch(papers: list[Paper], config: dict) -> RankedResult:
             last_error = str(exc)
             print(f"[ranker] JSON parse failed (attempt {attempt + 1}/{MAX_RETRIES}): {exc}")
 
-    print("[ranker] All retries exhausted — marking all papers as skim.")
-    return RankedResult(
-        must_read=[{"paper": papers[0], "summary": "LLM ranking unavailable."}] if papers else [],
-        skim=[{"paper": p, "summary": ""} for p in papers[1:]],
-        irrelevant=[],
+    raise RuntimeError(
+        f"[ranker] LLM ranking failed after {MAX_RETRIES} attempts. Last error: {last_error}"
     )
 
 
