@@ -19,7 +19,7 @@ import requests
 
 from sources import Paper
 
-ARXIV_BASE = "http://export.arxiv.org/api/query"
+ARXIV_BASE = "https://export.arxiv.org/api/query"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"
 BATCH_SIZE = 100
@@ -83,14 +83,14 @@ def fetch_arxiv(config: dict, start_date: date, end_date: date) -> tuple[list[Pa
 def _fetch_batch(params: dict) -> tuple[list[tuple[Paper, date]], list[str]]:
     for attempt in range(MAX_RETRIES):
         try:
-            resp = requests.get(ARXIV_BASE, params=params, timeout=30)
+            resp = requests.get(ARXIV_BASE, params=params, timeout=60)
             resp.raise_for_status()
             return _parse_atom(resp.content)
-        except requests.HTTPError as exc:
+        except requests.exceptions.RequestException as exc:
             if attempt == MAX_RETRIES - 1:
                 raise
-            wait = 2 ** (attempt + 1)
-            print(f"[arxiv] HTTP error {exc}, retrying in {wait}s…")
+            wait = 2 ** (attempt + 2)  # 8s, 16s
+            print(f"[arxiv] Request failed (attempt {attempt + 1}/{MAX_RETRIES}): {exc} — retrying in {wait}s…")
             time_mod.sleep(wait)
     return [], []
 
