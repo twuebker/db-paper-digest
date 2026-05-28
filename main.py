@@ -1,10 +1,7 @@
-"""db-paper-digest: daily database research paper digest via email."""
-
 import argparse
 import os
 import sys
 import time
-from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -12,105 +9,73 @@ import yaml
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
-_REPO_ROOT = Path(__file__).parent.parent
-
-# Config path: explicit env var (CI) → parent-dir default (local)
-_CONFIG_PATH = Path(os.environ.get("DIGEST_CONFIG") or _REPO_ROOT / "config.yaml")
-
-@contextmanager
-def _timed(label: str):
-    t0 = time.perf_counter()
-    yield
-    print(f"[timing] {label}: {time.perf_counter() - t0:.2f}s")
-
-
-from pipeline.dedup import dedup_same_day
 from pipeline.email_sender import send_digest_email, send_empty_email
 from pipeline.ranker import rank_papers
 from sources.arxiv import fetch_arxiv
 
+_REPO_ROOT = Path(__file__).parent.parent
+_CONFIG_PATH = Path(os.environ.get("DIGEST_CONFIG") or _REPO_ROOT / "config.yaml")
+
 
 def main() -> None:
     args = _parse_args()
-    # .env is only needed locally; in CI secrets arrive as real env vars
-    _env_file = _REPO_ROOT / ".env"
-    if _env_file.exists():
-        load_dotenv(_env_file)
+    if (_env := _REPO_ROOT / ".env").exists():
+        load_dotenv(_env)
     config = _load_config(_CONFIG_PATH)
     _validate_env()
 
     start_date, end_date = _compute_date_range(args)
     print(f"[main] Fetching papers for {start_date} – {end_date}")
 
-    t_total = time.perf_counter()
-
-    with _timed("fetch (arxiv)"):
-        arxiv_papers, warnings = fetch_arxiv(config, start_date, end_date)
-        print(f"[main] arxiv: {len(arxiv_papers)} papers fetched")
-        for w in warnings:
-            print(f"[main] WARNING: {w}", file=sys.stderr)
-
-    papers = dedup_same_day(arxiv_papers)
-    print(f"[main] {len(papers)} papers after deduplication")
+    t0 = time.perf_counter()
+    papers, warnings = fetch_arxiv(config, start_date, end_date)
+    print(f"[main] {len(papers)} papers fetched")
+    for w in warnings:
+        print(f"[main] WARNING: {w}", file=sys.stderr)
 
     if not papers:
         if args.dry_run:
             print("[main] No new papers — dry run, skipping empty digest email.")
         else:
-            print("[main] No new papers — sending empty digest.")
             send_empty_email(config, end_date)
         return
 
-    with _timed("rank (LLM)"):
-        ranked = rank_papers(papers, config)
+    ranked = rank_papers(papers, config)
     html = _render_digest(config, ranked, end_date, len(papers), warnings)
 
     if args.dry_run:
-        print("\n" + "=" * 72)
-        print(html)
-        print("=" * 72)
+        print("\n" + "=" * 72 + "\n" + html + "\n" + "=" * 72)
         print("[main] Dry run — email not sent.")
     else:
-        with _timed("send email"):
-            send_digest_email(config, html, end_date, len(papers))
+        send_digest_email(config, html, end_date, len(papers))
 
-    print(f"[timing] total: {time.perf_counter() - t_total:.2f}s")
+    print(f"[timing] total: {time.perf_counter() - t0:.2f}s")
 
 
 def _compute_date_range(args: argparse.Namespace) -> tuple[date, date]:
     if args.date and args.since:
         sys.exit("[main] --date and --since are mutually exclusive.")
-
     if args.date:
         d = date.fromisoformat(args.date)
         return d, d
-
     if args.since:
         start = date.fromisoformat(args.since)
         end = date.today() - timedelta(days=1)
         if start > end:
             sys.exit(f"[main] --since date {start} is in the future.")
         return start, end
-
     today = date.today()
-    if today.weekday() == 0:  # Monday — cover the weekend
-        start = today - timedelta(days=3)  # Friday
-        end = today - timedelta(days=1)    # Sunday
-    else:
-        yesterday = today - timedelta(days=1)
-        start = end = yesterday
-    return start, end
+    if today.weekday() == 0:  # Monday: cover the weekend
+        return today - timedelta(days=3), today - timedelta(days=1)
+    yesterday = today - timedelta(days=1)
+    return yesterday, yesterday
 
 
 def _render_digest(config: dict, ranked, digest_date: date, total: int, warnings: list[str] | None = None) -> str:
     from datetime import datetime
     template_file = config.get("template_file", "templates/digest.html")
-    template_dir = os.path.dirname(template_file)
-    template_name = os.path.basename(template_file)
-
-    env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
-    template = env.get_template(template_name)
-    return template.render(
+    env = Environment(loader=FileSystemLoader(os.path.dirname(template_file)), autoescape=True)
+    return env.get_template(os.path.basename(template_file)).render(
         digest_date=digest_date,
         total=total,
         must_read=ranked.must_read,
@@ -121,7 +86,7 @@ def _render_digest(config: dict, ranked, digest_date: date, total: int, warnings
     )
 
 
-def _load_config(path: str) -> dict:
+def _load_config(path) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -129,30 +94,15 @@ def _load_config(path: str) -> dict:
 def _validate_env() -> None:
     missing = [k for k in ("GEMINI_API_KEY", "GMAIL_APP_PASSWORD") if not os.environ.get(k)]
     if missing:
-        sys.exit(f"[main] Missing required environment variables: {', '.join(missing)}\n"
-                 f"       Set them in your .env file.")
+        sys.exit(f"[main] Missing env vars: {', '.join(missing)}")
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Send a daily DB paper digest email.")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print the rendered HTML to stdout instead of sending email.",
-    )
-    parser.add_argument(
-        "--date",
-        metavar="YYYY-MM-DD",
-        default=None,
-        help="Fetch papers for a specific date instead of yesterday.",
-    )
-    parser.add_argument(
-        "--since",
-        metavar="YYYY-MM-DD",
-        default=None,
-        help="Fetch papers from this date through yesterday (catch-up mode).",
-    )
-    return parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--date", metavar="YYYY-MM-DD", default=None)
+    p.add_argument("--since", metavar="YYYY-MM-DD", default=None)
+    return p.parse_args()
 
 
 if __name__ == "__main__":

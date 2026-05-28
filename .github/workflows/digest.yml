@@ -2,7 +2,7 @@ name: Daily DB Paper Digest
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # buffer: 04:00 CEST target, up to ~2h GitHub lag → ready by 06:00 CEST
+    - cron: '23 2 * * *'  # 04:23 CEST; odd minute avoids top-of-hour queue; arxiv RSS ready since ~20:00 UTC
   workflow_dispatch:
     inputs:
       since:

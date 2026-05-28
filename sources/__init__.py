@@ -8,7 +8,7 @@ class Paper:
     abstract: str | None
     authors: list[str]
     url: str
-    source: str       # "arxiv" | "crossref"
+    source: str
     venue: str | None = None      # conference/journal name or "Accepted at X"
     comment: str | None = None    # raw arXiv comment field
     journal_ref: str | None = None  # raw arXiv journal-ref field
