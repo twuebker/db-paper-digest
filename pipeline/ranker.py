@@ -105,10 +105,19 @@ def _call_llm(messages: list[dict], config: dict) -> str:
         max_output_tokens=max_tokens,
         **({} if thinking else {"thinking_config": types.ThinkingConfig(thinking_budget=0)}),
     )
-    t0 = time.perf_counter()
-    response = client.models.generate_content(model=model, contents=contents, config=cfg)
-    print(f"[timing] gemini: {time.perf_counter() - t0:.2f}s")
-    return response.text
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            t0 = time.perf_counter()
+            response = client.models.generate_content(model=model, contents=contents, config=cfg)
+            print(f"[timing] gemini: {time.perf_counter() - t0:.2f}s")
+            return response.text
+        except Exception as exc:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            wait = 2 ** (attempt + 2)
+            print(f"[ranker] Gemini error (attempt {attempt + 1}/{MAX_RETRIES}): {exc} — retrying in {wait}s")
+            time.sleep(wait)
 
 
 def _parse_response(raw: str, original_papers: list[Paper]) -> RankedResult:
