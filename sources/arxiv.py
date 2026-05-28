@@ -32,10 +32,11 @@ _STRIP_HTML = re.compile(r'<[^>]+>')
 def fetch_arxiv(config: dict, start_date: date, end_date: date) -> tuple[list[Paper], list[str]]:
     categories = config.get("arxiv_categories", ["cs.DB", "cs.IR"])
     papers, warnings, batch_date = _try_rss(categories)
-    if batch_date is not None and batch_date >= start_date - timedelta(days=1):
+    today = date.today()
+    if batch_date is not None and batch_date >= today - timedelta(days=5):
         print(f"[arxiv] RSS: batch_date={batch_date}, {len(papers)} papers")
         return papers, warnings
-    print(f"[arxiv] RSS miss (batch_date={batch_date}) — using export API")
+    print(f"[arxiv] RSS stale or unavailable (batch_date={batch_date}) — using export API")
     return _fetch_export_api(categories, start_date, end_date)
 
 
@@ -78,17 +79,19 @@ def _parse_rss(xml_bytes: bytes, category: str) -> tuple[list[Paper], list[str],
     papers, warnings = [], []
     for item in channel.findall("item"):
         title_raw = (item.findtext("title") or "").strip()
-        m = _ARXIV_ID_RE.search(title_raw)
+        link = (item.findtext("link") or "").strip()
+        m = re.search(r'arxiv\.org/abs/(\d{4}\.\d+)', link, re.IGNORECASE) or _ARXIV_ID_RE.search(title_raw)
         if not m:
-            warnings.append(f"RSS: no arXiv ID in title: {title_raw!r}")
+            warnings.append(f"RSS: no arXiv ID found for: {title_raw!r}")
             continue
         arxiv_id = m.group(1)
         title = re.sub(r'\s*\(arXiv:[^\)]+\)\s*$', '', title_raw).strip() or title_raw
-        description = (item.findtext("description") or "").strip()
-        abstract = html.unescape(_STRIP_HTML.sub("", description)).strip() or None
+        description = html.unescape(_STRIP_HTML.sub("", (item.findtext("description") or ""))).strip()
+        if "Abstract:" in description:
+            description = description[description.index("Abstract:") + 9:].strip()
+        abstract = description or None
         creator = (item.findtext(f"{DC_NS}creator") or "").strip()
         authors = [a.strip() for a in creator.split(",") if a.strip()]
-        link = (item.findtext("link") or "").strip()
         url = re.sub(r'v\d+$', '', link.replace("http://", "https://")) if link else f"https://arxiv.org/abs/{arxiv_id}"
         comment_el = item.find(f"{ARXIV_NS}comment")
         comment = " ".join((comment_el.text or "").split()) if comment_el is not None else None

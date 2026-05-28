@@ -36,7 +36,7 @@ def _send(config: dict, subject: str, html: str) -> None:
         smtp.login(sender, password)
         smtp.sendmail(sender, recipient, msg.as_string())
 
-    print(f"[email] Sent: {subject!r} → {recipient}")
+    print(f"[email] Sent: {subject!r}")
 
 
 def _build_message(sender: str, recipient: str, subject: str, html: str, plain: str) -> MIMEMultipart:
