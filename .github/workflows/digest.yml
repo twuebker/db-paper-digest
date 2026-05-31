@@ -2,7 +2,7 @@ name: Daily DB Paper Digest
 
 on:
   schedule:
-    - cron: '23 2 * * *'  # 04:23 CEST; odd minute avoids top-of-hour queue; arxiv RSS ready since ~20:00 UTC
+    - cron: '0 1 * * 1-5'  # 03:00 CEST weekdays only; arxiv RSS ready since ~20:00 UTC; earlier beats overnight queue
   workflow_dispatch:
     inputs:
       since:

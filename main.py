@@ -65,10 +65,9 @@ def _compute_date_range(args: argparse.Namespace) -> tuple[date, date]:
             sys.exit(f"[main] --since date {start} is in the future.")
         return start, end
     today = date.today()
-    if today.weekday() == 0:  # Monday: cover the weekend
-        return today - timedelta(days=3), today - timedelta(days=1)
-    yesterday = today - timedelta(days=1)
-    return yesterday, yesterday
+    # Monday's arxiv batch (Fri–Mon submissions) is dated today, not yesterday.
+    d = today if today.weekday() == 0 else today - timedelta(days=1)
+    return d, d
 
 
 def _render_digest(config: dict, ranked, digest_date: date, total: int, warnings: list[str] | None = None) -> str:
