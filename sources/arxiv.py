@@ -87,6 +87,7 @@ def _parse_rss(xml_bytes: bytes, category: str) -> tuple[list[Paper], list[str],
         arxiv_id = m.group(1)
         title = re.sub(r'\s*\(arXiv:[^\)]+\)\s*$', '', title_raw).strip() or title_raw
         description = html.unescape(_STRIP_HTML.sub("", (item.findtext("description") or ""))).strip()
+        is_replacement = "Announce Type: replace" in description
         if "Abstract:" in description:
             description = description[description.index("Abstract:") + 9:].strip()
         abstract = description or None
@@ -98,6 +99,7 @@ def _parse_rss(xml_bytes: bytes, category: str) -> tuple[list[Paper], list[str],
         papers.append(Paper(
             id=arxiv_id, title=title, abstract=abstract, authors=authors,
             url=url, source="arxiv", venue=_detect_venue(comment, None), comment=comment,
+            is_replacement=is_replacement,
         ))
     return papers, warnings, batch_date
 

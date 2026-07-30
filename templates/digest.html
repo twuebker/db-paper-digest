@@ -164,6 +164,21 @@
       line-height: 1.5;
     }
 
+    /* ── Replacement badge ───────────────────────────────────── */
+    .badge-revised {
+      display: inline-block;
+      font-size: 0.68em;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: #5a5aaa;
+      background: #ebebff;
+      border-radius: 3px;
+      padding: 1px 5px;
+      margin-left: 6px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
     /* ── Footer ──────────────────────────────────────────────── */
     footer {
       margin-top: 52px;
@@ -209,7 +224,7 @@
 <div class="section-heading">🏆 Must Read 🏆 <span class="count">({{ must_read | length }})</span></div>
 {% for item in must_read %}
 <div class="paper-must">
-  <div class="paper-title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a></div>
+  <div class="paper-title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a>{% if item.paper.is_replacement %}<span class="badge-revised">revised</span>{% endif %}</div>
   {% if item.paper.authors %}
   <div class="paper-authors">{{ item.paper.authors[:9] | join(", ") }}{% if item.paper.authors | length > 9 %} et al.{% endif %}</div>
   {% endif %}
@@ -226,7 +241,7 @@
 <div class="section-heading">👀 Worth a Skim <span class="count">({{ skim | length }})</span></div>
 {% for item in skim %}
 <div class="paper-skim">
-  <div class="paper-title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a></div>
+  <div class="paper-title"><a href="{{ item.paper.url }}">{{ item.paper.title }}</a>{% if item.paper.is_replacement %}<span class="badge-revised">revised</span>{% endif %}</div>
   {% if item.paper.authors %}
   <div class="paper-authors">{{ item.paper.authors[:9] | join(", ") }}{% if item.paper.authors | length > 9 %} et al.{% endif %}</div>
   {% endif %}
@@ -244,7 +259,7 @@
 {% for item in irrelevant %}
 <div class="irr-item">
   <div class="irr-title">
-    <a href="{{ item.paper.url }}">{{ item.paper.title }}</a>
+    <a href="{{ item.paper.url }}">{{ item.paper.title }}</a>{% if item.paper.is_replacement %}<span class="badge-revised">revised</span>{% endif %}
     {% if item.paper.authors %}
     <div class="irr-synopsis">{{ item.paper.authors[:9] | join(", ") }}{% if item.paper.authors | length > 9 %} et al.{% endif %}</div>
     {% endif %}

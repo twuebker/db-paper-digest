@@ -9,9 +9,10 @@ class Paper:
     authors: list[str]
     url: str
     source: str
-    venue: str | None = None      # conference/journal name or "Accepted at X"
-    comment: str | None = None    # raw arXiv comment field
-    journal_ref: str | None = None  # raw arXiv journal-ref field
+    venue: str | None = None
+    comment: str | None = None
+    journal_ref: str | None = None
+    is_replacement: bool = False
 
 
 @dataclass
