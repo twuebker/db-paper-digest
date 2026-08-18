@@ -2,7 +2,13 @@ name: Daily DB Paper Digest
 
 on:
   schedule:
-    - cron: '0 1 * * 1-5'  # 03:00 CEST weekdays only; arxiv RSS ready since ~20:00 UTC; earlier beats overnight queue
+    # arXiv rebuilds its RSS feed at ~00:00 US Eastern — 04:00 UTC in summer,
+    # 05:00 UTC in winter. Two post-rebuild attempts cover both seasons and give
+    # a same-day backup if one run is delayed or dropped. The watermark (restored
+    # from the Actions cache) makes the second run a ~2s no-op once the first has
+    # already sent. Odd minutes avoid top-of-the-hour scheduling congestion.
+    - cron: '20 4 * * 1-5'   # ~06:20 CEST — summer settle
+    - cron: '20 5 * * 1-5'   # ~06:20 CET  — winter settle / backup
   workflow_dispatch:
     inputs:
       since:
@@ -11,6 +17,11 @@ on:
       date:
         description: 'Fetch papers for a single specific date (YYYY-MM-DD). Leave empty for yesterday.'
         required: false
+
+# Serialize runs so a delayed poll can't overlap and race on the cached state.
+concurrency:
+  group: digest
+  cancel-in-progress: false
 
 jobs:
   digest:
@@ -23,6 +34,18 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+
+      # Persist the tiny watermark file (state/seen.json) across runs WITHOUT
+      # committing to the repo. Cache entries are immutable, so we save under a
+      # unique per-run key and restore the newest previous one via the shared
+      # prefix. Weekday runs keep it well inside the 7-day eviction window.
+      - name: Restore digest state
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: digest-state-${{ github.run_id }}
+          restore-keys: |
+            digest-state-
 
       - name: Install dependencies
         run: pip install -r requirements.txt

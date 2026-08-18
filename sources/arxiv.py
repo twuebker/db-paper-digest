@@ -29,15 +29,29 @@ _ARXIV_ID_RE = re.compile(r'arXiv:(\d{4}\.\d+)', re.IGNORECASE)
 _STRIP_HTML = re.compile(r'<[^>]+>')
 
 
-def fetch_arxiv(config: dict, start_date: date, end_date: date) -> tuple[list[Paper], list[str]]:
+def fetch_arxiv(config: dict, start_date: date, end_date: date) -> tuple[list[Paper], list[str], date | None]:
     categories = config.get("arxiv_categories", ["cs.DB", "cs.IR"])
     papers, warnings, batch_date = _try_rss(categories)
     today = date.today()
     if batch_date is not None and batch_date >= today - timedelta(days=5):
         print(f"[arxiv] RSS: batch_date={batch_date}, {len(papers)} papers")
-        return papers, warnings
+        return papers, warnings, batch_date
     print(f"[arxiv] RSS stale or unavailable (batch_date={batch_date}) — using export API")
-    return _fetch_export_api(categories, start_date, end_date)
+    papers, warnings = _fetch_export_api(categories, start_date, end_date)
+    return papers, warnings, None
+
+
+def fetch_arxiv_day(config: dict, day: date) -> tuple[list[Paper], list[str]]:
+    """Fetch papers *announced* on a single day via the export API.
+
+    Used to backfill a day whose live RSS batch we missed (the RSS feed only
+    ever holds the latest batch, so a missed day can't be recovered from it).
+    Note: the export API filters by submission date, so this reliably recovers
+    new submissions but may miss same-day replacements (whose submission date is
+    older than the announcement).
+    """
+    categories = config.get("arxiv_categories", ["cs.DB", "cs.IR"])
+    return _fetch_export_api(categories, day, day)
 
 
 def _try_rss(categories: list[str]) -> tuple[list[Paper], list[str], date | None]:
