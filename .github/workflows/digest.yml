@@ -2,31 +2,30 @@ name: Daily DB Paper Digest
 
 on:
   schedule:
-    # arXiv rebuilds its RSS feed at ~00:00 US Eastern — 04:00 UTC in summer,
-    # 05:00 UTC in winter. Two post-rebuild attempts cover both seasons and give
-    # a same-day backup if one run is delayed or dropped. The watermark (restored
-    # from the Actions cache) makes the second run a ~2s no-op once the first has
-    # already sent. Odd minutes avoid top-of-the-hour scheduling congestion.
-    - cron: '20 4 * * 1-5'   # ~06:20 CEST — summer settle
-    - cron: '20 5 * * 1-5'   # ~06:20 CET  — winter settle / backup
+    # arXiv rebuilds the RSS feed at midnight US Eastern: 04:00 UTC in summer, 05:00 UTC in winter.
+    # GitHub starts scheduled runs hours late and sometimes drops them, so poll every 30 minutes
+    # across the morning: the first run that executes after the rebuild sends the digest. Runs that
+    # see the previous (or an empty) feed find nothing unsent and exit without emailing.
+    - cron: '17,47 0-9 * * 1-5'
   workflow_dispatch:
     inputs:
       since:
-        description: 'Fetch papers since this date (YYYY-MM-DD). Leave empty for yesterday.'
-        required: false
-      date:
-        description: 'Fetch papers for a single specific date (YYYY-MM-DD). Leave empty for yesterday.'
+        description: 'Backfill: email all papers submitted since this UTC time (YYYY-MM-DD or YYYY-MM-DDTHH:MM). Empty = latest RSS batch.'
         required: false
 
-# Serialize runs so a delayed poll can't overlap and race on the cached state.
+# Runs share the sent-papers state, so never let two overlap.
 concurrency:
   group: digest
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: write  # for the keep-alive call below
+
 jobs:
   digest:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -35,35 +34,37 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      # Persist the tiny watermark file (state/seen.json) across runs WITHOUT
-      # committing to the repo. Cache entries are immutable, so we save under a
-      # unique per-run key and restore the newest previous one via the shared
-      # prefix. Weekday runs keep it well inside the 7-day eviction window.
-      - name: Restore digest state
-        uses: actions/cache@v4
+      - run: pip install -r requirements.txt
+
+      # state/sent.json (ids already emailed) lives in the Actions cache. Entries are immutable, so
+      # each changed state is saved under its content hash and the newest one is restored by prefix.
+      - id: restore
+        uses: actions/cache/restore@v4
         with:
           path: state
           key: digest-state-${{ github.run_id }}
-          restore-keys: |
-            digest-state-
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Write config from secret
-        run: printf '%s' "$CONFIG_YAML" > /tmp/config.yaml
-        env:
-          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
+          restore-keys: digest-state-
 
       - name: Run digest
         run: |
-          ARGS=""
-          [ -n "$SINCE" ] && ARGS="--since $SINCE"
-          [ -n "$DATE" ]  && ARGS="--date $DATE"
-          python main.py $ARGS
+          printf '%s' "$CONFIG_YAML" > "$RUNNER_TEMP/config.yaml"
+          python main.py ${SINCE:+--since "$SINCE"}
         env:
-          SINCE: ${{ github.event.inputs.since }}
-          DATE: ${{ github.event.inputs.date }}
-          DIGEST_CONFIG: /tmp/config.yaml
+          SINCE: ${{ inputs.since }}
+          CONFIG_YAML: ${{ secrets.CONFIG_YAML }}
+          DIGEST_CONFIG: ${{ runner.temp }}/config.yaml
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+
+      - if: hashFiles('state/sent.json') != '' && steps.restore.outputs.cache-matched-key != format('digest-state-{0}', hashFiles('state/sent.json'))
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: digest-state-${{ hashFiles('state/sent.json') }}
+
+      # GitHub disables schedules after 60 days without repository activity; re-enabling resets that.
+      - name: Keep schedule alive
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/digest.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}

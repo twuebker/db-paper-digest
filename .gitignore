@@ -1,7 +1,6 @@
-.env
 __pycache__/
-*.pyc
 .venv/
-venv/
-logs/
 state/
+preview.html
+.env
+config.yaml
