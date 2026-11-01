@@ -27,9 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -39,7 +39,7 @@ jobs:
       # state/sent.json (ids already emailed) lives in the Actions cache. Entries are immutable, so
       # each changed state is saved under its content hash and the newest one is restored by prefix.
       - id: restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: state
           key: digest-state-${{ github.run_id }}
@@ -57,7 +57,7 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
 
       - if: hashFiles('state/sent.json') != '' && steps.restore.outputs.cache-matched-key != format('digest-state-{0}', hashFiles('state/sent.json'))
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: state
           key: digest-state-${{ hashFiles('state/sent.json') }}
