@@ -18,6 +18,8 @@
     .card { border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin-bottom: 12px; }
     .card.must { border-top: 3px solid #d4a017; }
     .paper { font-size: 0.97em; font-weight: 600; line-height: 1.4; }
+    .revised { font-size: 0.72em; font-weight: 600; color: #5a5aaa; background: #ebebff; border-radius: 3px;
+               padding: 1px 5px; margin-left: 6px; white-space: nowrap; }
     .authors { font-size: 0.80em; color: #8a8a8e; margin-top: 4px; }
     .summary { font-size: 0.88em; color: #3a3a3c; margin-top: 10px; line-height: 1.55; }
     .item { padding: 9px 0; border-bottom: 1px solid #f0f0f0; }
@@ -28,6 +30,10 @@
 </head>
 <body>
 
+{% macro heading(paper) %}
+  <div class="paper"><a href="{{ paper.url }}">{{ paper.title }}</a>{% if paper.revision %}<span class="revised">revised {{ paper.revision }}</span>{% endif %}</div>
+{% endmacro %}
+
 {% macro authors(paper) %}
   {% if paper.authors %}
   <div class="authors">{{ paper.authors[:9] | join(", ") }}{% if paper.authors | length > 9 %} et al.{% endif %}</div>
@@ -37,7 +43,7 @@
 {% macro cards(items, cls) %}
   {% for paper, summary in items %}
   <div class="card {{ cls }}">
-    <div class="paper"><a href="{{ paper.url }}">{{ paper.title }}</a></div>
+    {{ heading(paper) }}
     {{ authors(paper) }}
     {% if summary %}<div class="summary">{{ summary }}</div>{% endif %}
   </div>
@@ -46,7 +52,7 @@
 
 <div class="header">
   <div class="title">DB Paper Digest &mdash; {{ label }}</div>
-  <div class="meta">{{ total }} new paper{{ 's' if total != 1 else '' }}</div>
+  <div class="meta">{{ count }}</div>
 </div>
 
 {% if must_read %}
@@ -63,7 +69,7 @@
 <div class="section">📦 Everything Else ({{ irrelevant | length }})</div>
 {% for paper, summary in irrelevant %}
 <div class="item">
-  <div class="paper"><a href="{{ paper.url }}">{{ paper.title }}</a></div>
+  {{ heading(paper) }}
   {{ authors(paper) }}
   {% if summary %}<div class="summary">{{ summary }}</div>{% endif %}
 </div>

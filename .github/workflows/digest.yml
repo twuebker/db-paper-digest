@@ -3,10 +3,10 @@ name: Daily DB Paper Digest
 on:
   schedule:
     # arXiv rebuilds the RSS feed at midnight US Eastern: 04:00 UTC in summer, 05:00 UTC in winter.
-    # GitHub starts scheduled runs hours late and sometimes drops them, so poll every 30 minutes
-    # across the morning: the first run that executes after the rebuild sends the digest. Runs that
-    # see the previous (or an empty) feed find nothing unsent and exit without emailing.
-    - cron: '17,47 0-9 * * 1-5'
+    # GitHub starts scheduled runs roughly 2-7 hours late, so runs are spread from well before the
+    # rebuild until after it: the first one that executes after the rebuild sends the digest. Runs
+    # that see the previous (or an empty) feed find nothing unsent and exit without emailing.
+    - cron: '17 0-9/3 * * 1-5'
   workflow_dispatch:
     inputs:
       since:

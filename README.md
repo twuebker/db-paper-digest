@@ -7,12 +7,13 @@ interests, and emails you the digest.
 ## How it runs
 
 - arXiv rebuilds its RSS feed at midnight US Eastern (04:00 UTC in summer, 05:00 UTC in winter).
-- The GitHub Actions workflow polls every 30 minutes between 00:00 and 10:00 UTC on weekdays. GitHub starts
-  scheduled runs late (often by hours) and sometimes drops them, so the first run that executes after the
+- The GitHub Actions workflow is scheduled every 3 hours from 00:17 to 09:17 UTC on weekdays. GitHub starts
+  scheduled runs roughly 2-7 hours late and may drop some, so the first run that actually executes after the
   rebuild sends the digest.
 - Every emailed arXiv id is recorded in `state/sent.json`, which persists in the Actions cache between runs.
   Runs skip recorded ids, so polls that see the previous feed, or one that was already emailed, send nothing.
-- Replacements (new versions of older papers) are left out; only new submissions and cross-lists are sent.
+- Revised versions of older papers are included and marked with a badge. Each revision is tracked separately,
+  so a new version still appears even if the original paper was already emailed.
 
 ## Setup
 

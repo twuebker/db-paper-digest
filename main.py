@@ -36,16 +36,20 @@ def main() -> None:
         label = str(batch_date)
 
     sent = json.loads(STATE.read_text()) if STATE.exists() else {}
-    papers = [p for p in papers if p.id not in sent]
+    papers = [p for p in papers if p.key not in sent]
     print(f"[main] {label}: {len(papers)} unsent paper(s)")
     if not papers:
         return
 
+    revised = sum(1 for p in papers if p.revision)
+    new = len(papers) - revised
+    count = f"{new} new paper{'s' if new != 1 else ''}" + (f", {revised} revised" if revised else "")
+
     tiers = rank(papers, config["research_description"], config.get("llm_model", DEFAULT_MODEL))
     html = Environment(loader=FileSystemLoader(ROOT / "templates"), autoescape=True).get_template("digest.html").render(
-        label=label, total=len(papers), categories=categories, **tiers,
+        label=label, count=count, categories=categories, **tiers,
     )
-    subject = f"DB Paper Digest – {label} | {len(papers)} new paper{'s' if len(papers) != 1 else ''}"
+    subject = f"DB Paper Digest – {label} | {count}"
     if args.dry_run:
         Path("preview.html").write_text(html)
         print(f"[main] Dry run: wrote preview.html ({subject!r})")
@@ -53,7 +57,7 @@ def main() -> None:
 
     send(config["sender_email"], config["recipient_email"], subject, html)
     today = date.today()
-    sent.update({p.id: today.isoformat() for p in papers})
+    sent.update({p.key: today.isoformat() for p in papers})
     sent = {i: d for i, d in sent.items() if date.fromisoformat(d) > today - RETENTION}
     STATE.parent.mkdir(exist_ok=True)
     STATE.write_text(json.dumps(sent, indent=0, sort_keys=True))

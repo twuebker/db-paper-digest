@@ -24,6 +24,12 @@ class Paper:
     title: str
     abstract: str
     authors: list[str]
+    revision: str = ""  # version of a revised paper, e.g. "v2"; empty for new papers
+
+    @property
+    def key(self) -> str:
+        """Identity for de-duplication: each revision counts separately from the original paper."""
+        return self.id + self.revision
 
     @property
     def url(self) -> str:
@@ -31,10 +37,9 @@ class Paper:
 
 
 def fetch_rss(categories: list[str]) -> tuple[list[Paper], date | None]:
-    """Return the feed's current announcement batch (new submissions and cross-lists) and its date.
+    """Return the feed's current announcement batch (new, cross-listed and revised papers) and its date.
 
     The feed only ever holds the latest batch and is empty on days without an announcement.
-    Replacements of older papers are skipped: they were already announced when first submitted.
     """
     papers: dict[str, Paper] = {}
     batch_date = None
@@ -42,15 +47,15 @@ def fetch_rss(categories: list[str]) -> tuple[list[Paper], date | None]:
         channel = ET.fromstring(_get(RSS_URL.format(category))).find("channel")
         batch_date = parsedate_to_datetime(channel.findtext("pubDate")).date()
         for item in channel.iter("item"):
-            if item.findtext(f"{ARXIV}announce_type") not in ("new", "cross"):
-                continue
-            arxiv_id = item.findtext("link").rstrip("/").split("/")[-1]
+            arxiv_id, version = item.findtext("guid").removeprefix("oai:arXiv.org:").rsplit("v", 1)
+            revised = item.findtext(f"{ARXIV}announce_type").startswith("replace")
             abstract = item.findtext("description").split("Abstract:", 1)[-1]
             papers.setdefault(arxiv_id, Paper(
                 id=arxiv_id,
                 title=_clean(item.findtext("title")),
                 abstract=_clean(abstract),
                 authors=[a.strip() for a in item.findtext(f"{DC}creator", "").split(",") if a.strip()],
+                revision=f"v{version}" if revised else "",
             ))
     return list(papers.values()), batch_date
 
