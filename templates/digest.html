@@ -17,6 +17,7 @@
                color: #8a8a8e; margin: 40px 0 16px; }
     .card { border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin-bottom: 12px; }
     .card.must { border-top: 3px solid #d4a017; }
+    .card.blog { border-top: 3px solid #3a7bd5; }
     .paper { font-size: 0.97em; font-weight: 600; line-height: 1.4; }
     .revised { font-size: 0.72em; font-weight: 600; color: #5a5aaa; background: #ebebff; border-radius: 3px;
                padding: 1px 5px; margin-left: 6px; white-space: nowrap; }
@@ -54,6 +55,17 @@
   <div class="title">DB Paper Digest &mdash; {{ label }}</div>
   <div class="meta">{{ count }}</div>
 </div>
+
+{% if posts %}
+<div class="section">📝 New Blog Posts ({{ posts | length }})</div>
+{% for post, summary in posts %}
+<div class="card blog">
+  <div class="paper"><a href="{{ post.url }}">{{ post.title }}</a></div>
+  <div class="authors">{{ post.blog }} &middot; {{ post.author }} &middot; {{ post.published }}</div>
+  <div class="summary">{{ summary }}</div>
+</div>
+{% endfor %}
+{% endif %}
 
 {% if must_read %}
 <div class="section">🏆 Must Read ({{ must_read | length }})</div>

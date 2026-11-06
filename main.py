@@ -13,10 +13,11 @@ from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
 from arxiv import fetch_api, fetch_rss
-from ranker import rank
+from blogs import fetch_posts
+from ranker import rank, summarize
 
 ROOT = Path(__file__).parent
-# arXiv ids already emailed. Every run skips these, so repeated or early runs never resend a paper.
+# Papers and blog posts already emailed. Every run skips these, so repeated or early runs never resend one.
 STATE = ROOT / "state" / "sent.json"
 RETENTION = timedelta(days=30)
 DEFAULT_MODEL = "gemini-2.5-flash"
@@ -41,13 +42,21 @@ def main() -> None:
     if not papers:
         return
 
+    # Blog posts ride along with the next paper digest, so they never cause an extra email.
+    posts = [p for p in fetch_posts() if p.url not in sent]
+    print(f"[main] {len(posts)} unsent blog post(s)")
+
     revised = sum(1 for p in papers if p.revision)
     new = len(papers) - revised
     count = f"{new} new paper{'s' if new != 1 else ''}" + (f", {revised} revised" if revised else "")
+    if posts:
+        count += f", {len(posts)} blog post{'s' if len(posts) != 1 else ''}"
 
-    tiers = rank(papers, config["research_description"], config.get("llm_model", DEFAULT_MODEL))
+    model = config.get("llm_model", DEFAULT_MODEL)
+    tiers = rank(papers, config["research_description"], model)
+    summaries = [(p, summarize(p, model)) for p in posts]
     html = Environment(loader=FileSystemLoader(ROOT / "templates"), autoescape=True).get_template("digest.html").render(
-        label=label, count=count, categories=categories, **tiers,
+        label=label, count=count, categories=categories, posts=summaries, **tiers,
     )
     subject = f"DB Paper Digest – {label} | {count}"
     if args.dry_run:
@@ -57,7 +66,7 @@ def main() -> None:
 
     send(config["sender_email"], config["recipient_email"], subject, html)
     today = date.today()
-    sent.update({p.key: today.isoformat() for p in papers})
+    sent.update({key: today.isoformat() for key in [p.key for p in papers] + [p.url for p in posts]})
     sent = {i: d for i, d in sent.items() if date.fromisoformat(d) > today - RETENTION}
     STATE.parent.mkdir(exist_ok=True)
     STATE.write_text(json.dumps(sent, indent=0, sort_keys=True))

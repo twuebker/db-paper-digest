@@ -2,7 +2,7 @@
 
 Every weekday morning this bot fetches the new papers from arXiv's cs.DB RSS feed, summarizes them with a
 free Gemini model, sorts them into *must read* / *worth a skim* / *everything else* against your research
-interests, and emails you the digest.
+interests, and emails you the digest. New posts from the blogs in `blogs.py` appear at the top.
 
 ## How it runs
 
@@ -10,10 +10,13 @@ interests, and emails you the digest.
 - The GitHub Actions workflow is scheduled every 3 hours from 00:17 to 09:17 UTC on weekdays. GitHub starts
   scheduled runs roughly 2-7 hours late and may drop some, so the first run that actually executes after the
   rebuild sends the digest.
-- Every emailed arXiv id is recorded in `state/sent.json`, which persists in the Actions cache between runs.
-  Runs skip recorded ids, so polls that see the previous feed, or one that was already emailed, send nothing.
+- Every emailed paper and blog post is recorded in `state/sent.json`, which persists in the Actions cache
+  between runs. Runs skip recorded items, so polls that see the previous feed, or one that was already emailed,
+  send nothing.
 - Revised versions of older papers are included and marked with a badge. Each revision is tracked separately,
   so a new version still appears even if the original paper was already emailed.
+- Blog posts count as new for 14 days after publication. They go out with the next paper digest, so they never
+  trigger an email of their own. To follow another blog, add its RSS or Atom feed to `FEEDS` in `blogs.py`.
 
 ## Setup
 
