@@ -51,7 +51,8 @@ def rank(papers: list[Paper], research: str, model: str) -> dict[str, list[tuple
     Large inputs (backfills) are ranked in batches of BATCH_SIZE, each contributing its own
     must-read and skim picks, so bigger digests surface proportionally more papers.
     """
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    # system_instruction and response_schema need v1beta; the SDK's default version can change.
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"], http_options=types.HttpOptions(api_version="v1beta"))
     config = types.GenerateContentConfig(
         system_instruction=PROMPT.format(research=research, max_skim=MAX_SKIM),
         temperature=0.1,
